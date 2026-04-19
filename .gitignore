@@ -1,0 +1,29 @@
+# Capturas e bases locais geradas pela operacao
+*.pcap
+*.pcapng
+*.cap
+*.sqlite
+*.sqlite3
+*.db
+
+# Saidas geradas durante uso/exportacao
+extracted_calls/
+gui_exports/
+v2_exports/
+*_exports/
+*_report.json
+*_report.html
+
+# Caches e temporarios
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.tmp
+*.log
+
+# Build intermediario Rust/Python
+target/
+build/
