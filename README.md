@@ -116,8 +116,3 @@ O HTML inclui:
 ```powershell
 & 'C:\Users\Victor\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m unittest discover -s v2/tests
 ```
-
-## Observações
-
-- `siprtp_ai.py` permanece no projeto porque a V2 usa esse módulo como engine de análise SIP/RTP do PCAP reduzido.
-- O fluxo V1 de PCAP único foi removido da pasta principal para manter apenas a aplicação V2.
