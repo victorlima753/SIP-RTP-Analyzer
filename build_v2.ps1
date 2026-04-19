@@ -61,6 +61,7 @@ Remove-Item -LiteralPath (Join-Path $Dist $GuiName) -Recurse -Force -ErrorAction
     --hidden-import siprtp_v2_core `
     --hidden-import siprtp_v2_db `
     --hidden-import siprtp_v2_export `
+    --hidden-import siprtp_v2_benchmark `
     --hidden-import siprtp_v2_performance `
     --hidden-import siprtp_v2_report `
     --hidden-import siprtp_v2_tk_runtime `

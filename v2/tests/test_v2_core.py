@@ -45,6 +45,22 @@ class V2CoreTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp_path, ignore_errors=True)
 
+    def test_format_progress_includes_phase_timings(self) -> None:
+        text = core.format_progress(
+            {
+                "type": "done",
+                "call_count": 10,
+                "sip_events": 100,
+                "elapsed_seconds": 4.0,
+                "workers": 2,
+                "sip_scan_seconds": 3.0,
+                "rtp_catalog_seconds": 0.5,
+                "db_write_seconds": 0.25,
+            }
+        )
+
+        self.assertIn("fases: SIP=3.0s, RTP=0.5s, DB=0.25s", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,9 +8,11 @@ import json
 from pathlib import Path
 
 try:  # pragma: no cover
+    from . import siprtp_v2_benchmark
     from . import siprtp_v2_core
     from . import siprtp_v2_export
 except ImportError:  # pragma: no cover
+    import siprtp_v2_benchmark
     import siprtp_v2_core
     import siprtp_v2_export
 
@@ -35,6 +37,29 @@ def cmd_index(args: argparse.Namespace) -> None:
         progress_callback=print_event,
     )
     print(json.dumps({"type": "summary", **result}, ensure_ascii=False), flush=True)
+
+
+def cmd_benchmark(args: argparse.Namespace) -> None:
+    base = siprtp_v2_benchmark.default_datalog_base(Path(args.out_dir) if args.out_dir else None)
+    out_json = Path(args.out_json) if args.out_json else base.with_suffix(".json")
+    out_csv = Path(args.out_csv) if args.out_csv else base.with_suffix(".csv")
+    rows = siprtp_v2_benchmark.run_index_benchmark(
+        sip_dir=Path(args.sip_dir),
+        rtp_dir=Path(args.rtp_dir),
+        db_path=Path(args.db),
+        sip_servers=args.sip_servers,
+        rtp_servers=args.rtp_servers,
+        performance_profile=args.performance,
+        workers=args.workers,
+        iterations=args.iterations,
+        prefer_rust=not args.no_rust,
+        fast_indexer=Path(args.fast_indexer) if args.fast_indexer else None,
+        tshark_path=args.tshark,
+        out_json=out_json,
+        out_csv=out_csv,
+        progress_callback=print_event,
+    )
+    print(json.dumps({"type": "benchmark", "json": str(out_json), "csv": str(out_csv), "rows": rows}, ensure_ascii=False), flush=True)
 
 
 def cmd_search(args: argparse.Namespace) -> None:
@@ -80,6 +105,23 @@ def build_parser() -> argparse.ArgumentParser:
     index.add_argument("--performance", choices=["safe", "balanced", "turbo"], default="balanced")
     index.add_argument("--workers", default="auto", help="auto ou numero de workers")
     index.set_defaults(func=cmd_index)
+
+    bench = sub.add_parser("benchmark-indexacao", help="Mede desempenho da indexacao V2 e grava datalog JSON/CSV")
+    bench.add_argument("--sip-dir", required=True)
+    bench.add_argument("--rtp-dir", required=True)
+    bench.add_argument("--db", required=True)
+    bench.add_argument("--sip-servers", default="177.53.16.6,177.53.16.41")
+    bench.add_argument("--rtp-servers", default="177.53.16.42,177.53.16.43,177.53.16.45")
+    bench.add_argument("--performance", choices=["safe", "balanced", "turbo"], default="balanced")
+    bench.add_argument("--workers", default="auto", help="auto ou numero de workers")
+    bench.add_argument("--iterations", type=int, default=1)
+    bench.add_argument("--no-rust", action="store_true", help="Forca fallback Python/TShark")
+    bench.add_argument("--fast-indexer")
+    bench.add_argument("--tshark")
+    bench.add_argument("--out-dir")
+    bench.add_argument("--out-json")
+    bench.add_argument("--out-csv")
+    bench.set_defaults(func=cmd_benchmark)
 
     search = sub.add_parser("buscar", help="Busca chamadas no SQLite V2")
     search.add_argument("--db", required=True)

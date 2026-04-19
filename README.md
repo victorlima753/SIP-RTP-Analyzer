@@ -65,6 +65,14 @@ Extrair chamada:
 & 'C:\Users\Victor\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\v2\app\siprtp_v2_cli.py extrair --db .\capturas.siprtp.v2.sqlite --call-id "CALL_ID_AQUI" --out-dir .\v2_exports --margin 10 --performance balanced --workers auto
 ```
 
+Benchmark da indexacao:
+
+```powershell
+& 'C:\Users\Victor\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' .\v2\app\siprtp_v2_cli.py benchmark-indexacao --sip-dir .\SIP --rtp-dir .\RTP --db .\capturas.benchmark.sqlite --performance balanced --workers auto --out-dir .\benchmarks
+```
+
+O benchmark gera um datalog `.json` e `.csv` com tempo total, workers usados, quantidade de arquivos SIP/RTP, tamanho das pastas, chamadas/eventos encontrados e tempos por fase: scan SIP, catalogo RTP e escrita SQLite.
+
 ## Build
 
 ```powershell
@@ -92,6 +100,10 @@ cargo build --release
 - Rust/Cargo apenas para recompilar o motor `siprtp_fast_indexer.exe`.
 
 O pacote portable já inclui a GUI empacotada e o motor Rust compilado.
+
+## Desempenho
+
+O motor Rust prioriza PCAP classico gerado por `tcpdump`. Antes de processar a pasta completa, ele valida formato e linktype dos arquivos; se encontrar PCAPNG ou linktype ainda nao suportado, a aplicacao aciona fallback TShark de forma antecipada e registra o aviso no log.
 
 ## Relatórios
 

@@ -250,6 +250,16 @@ def index_folders_with_rust(
         "call_count": int(done_payload.get("call_count", 0)),
         "event_count": int(done_payload.get("sip_events", 0)),
         "elapsed_seconds": float(done_payload.get("elapsed_seconds", 0.0)),
+        "workers": int(done_payload.get("workers", 0) or 0),
+        "cpu_count": int(done_payload.get("cpu_count", 0) or 0),
+        "memory_total_gb": done_payload.get("memory_total_gb"),
+        "sip_file_count": int(done_payload.get("sip_file_count", 0) or 0),
+        "rtp_file_count": int(done_payload.get("rtp_file_count", 0) or 0),
+        "sip_bytes": int(done_payload.get("sip_bytes", 0) or 0),
+        "rtp_bytes": int(done_payload.get("rtp_bytes", 0) or 0),
+        "sip_scan_seconds": float(done_payload.get("sip_scan_seconds", 0.0) or 0.0),
+        "rtp_catalog_seconds": float(done_payload.get("rtp_catalog_seconds", 0.0) or 0.0),
+        "db_write_seconds": float(done_payload.get("db_write_seconds", 0.0) or 0.0),
     }
 
 
@@ -280,6 +290,11 @@ def index_folders_with_tshark(
     accumulators: dict[str, siprtp_ai.CallAccumulator] = {}
     call_files: dict[tuple[str, int], tuple[float, float]] = {}
     total_sip_events = 0
+    sip_scan_seconds = 0.0
+    rtp_catalog_seconds = 0.0
+    db_write_seconds = 0.0
+    sip_bytes = sum(path.stat().st_size for path in sip_files if path.exists())
+    rtp_bytes = sum(path.stat().st_size for path in rtp_files if path.exists())
 
     with db.connect_db(db_path) as conn:
         db.init_db(conn)
@@ -295,6 +310,7 @@ def index_folders_with_tshark(
         )
         capture_set_id = db.create_capture_set(conn, sip_dir, rtp_dir, config)
 
+        sip_scan_started = time.perf_counter()
         for index, pcap in enumerate(sip_files, start=1):
             emit(progress_callback, {"type": "file_start", "role": "sip", "index": index, "total": len(sip_files), "path": str(pcap)})
             file_first: float | None = None
@@ -354,7 +370,9 @@ def index_folders_with_tshark(
                     "calls": len(file_calls),
                 },
             )
+        sip_scan_seconds = time.perf_counter() - sip_scan_started
 
+        rtp_catalog_started = time.perf_counter()
         for index, pcap in enumerate(rtp_files, start=1):
             emit(progress_callback, {"type": "file_start", "role": "rtp", "index": index, "total": len(rtp_files), "path": str(pcap)})
             first_epoch, last_epoch, packet_count = scan_capture_time(tshark, pcap)
@@ -380,7 +398,9 @@ def index_folders_with_tshark(
                     "packets": packet_count,
                 },
             )
+        rtp_catalog_seconds = time.perf_counter() - rtp_catalog_started
 
+        db_write_started = time.perf_counter()
         for accumulator in accumulators.values():
             summary = accumulator.to_summary()
             db.insert_call_summary(conn, summary)
@@ -389,6 +409,7 @@ def index_folders_with_tshark(
         for (call_id, file_id), (first_epoch, last_epoch) in call_files.items():
             db.insert_call_file(conn, call_id, file_id, "sip", first_epoch, last_epoch)
         conn.commit()
+        db_write_seconds = time.perf_counter() - db_write_started
 
     elapsed = time.perf_counter() - start
     result = {
@@ -398,6 +419,13 @@ def index_folders_with_tshark(
         "call_count": len(accumulators),
         "sip_events": total_sip_events,
         "elapsed_seconds": round(elapsed, 3),
+        "sip_file_count": len(sip_files),
+        "rtp_file_count": len(rtp_files),
+        "sip_bytes": sip_bytes,
+        "rtp_bytes": rtp_bytes,
+        "sip_scan_seconds": round(sip_scan_seconds, 3),
+        "rtp_catalog_seconds": round(rtp_catalog_seconds, 3),
+        "db_write_seconds": round(db_write_seconds, 3),
     }
     emit(progress_callback, result)
     return {
@@ -406,6 +434,16 @@ def index_folders_with_tshark(
         "call_count": len(accumulators),
         "event_count": total_sip_events,
         "elapsed_seconds": elapsed,
+        "workers": 1,
+        "cpu_count": os.cpu_count() or 1,
+        "memory_total_gb": None,
+        "sip_file_count": len(sip_files),
+        "rtp_file_count": len(rtp_files),
+        "sip_bytes": sip_bytes,
+        "rtp_bytes": rtp_bytes,
+        "sip_scan_seconds": sip_scan_seconds,
+        "rtp_catalog_seconds": rtp_catalog_seconds,
+        "db_write_seconds": db_write_seconds,
     }
 
 
@@ -441,7 +479,10 @@ def format_progress(payload: dict[str, Any]) -> str:
     if kind == "start":
         workers = payload.get("workers")
         perf = payload.get("performance_profile")
-        suffix = f" | desempenho={perf} | workers={workers}" if workers else ""
+        counts = ""
+        if payload.get("sip_file_count") is not None:
+            counts = f" | SIP={payload.get('sip_file_count')} arquivo(s) | RTP={payload.get('rtp_file_count')} arquivo(s)"
+        suffix = f" | desempenho={perf} | workers={workers}{counts}" if workers else counts
         return f"Iniciando indexacao V2: SIP={payload.get('sip_dir')} | RTP={payload.get('rtp_dir')}{suffix}"
     if kind == "file_start":
         return f"[{payload.get('role')}] arquivo {payload.get('index')}/{payload.get('total')}: {payload.get('path')}"
@@ -457,9 +498,15 @@ def format_progress(payload: dict[str, Any]) -> str:
     if kind == "error":
         return f"ERRO {payload.get('code')}: {payload.get('message')}"
     if kind == "done":
+        phases = ""
+        if payload.get("sip_scan_seconds") is not None:
+            phases = (
+                f" | fases: SIP={payload.get('sip_scan_seconds')}s, "
+                f"RTP={payload.get('rtp_catalog_seconds')}s, DB={payload.get('db_write_seconds')}s"
+            )
         return (
             f"Indice V2 pronto: chamadas={payload.get('call_count')} | "
             f"eventos SIP={payload.get('sip_events')} | tempo={payload.get('elapsed_seconds')}s | "
-            f"workers={payload.get('workers', '')}"
+            f"workers={payload.get('workers', '')}{phases}"
         )
     return payload.get("message") or json.dumps(payload, ensure_ascii=False)

@@ -13,6 +13,9 @@ v2_exports/
 *_exports/
 *_report.json
 *_report.html
+benchmarks/
+index_benchmark_*.json
+index_benchmark_*.csv
 
 # Caches e temporarios
 __pycache__/
@@ -27,3 +30,4 @@ __pycache__/
 # Build intermediario Rust/Python
 target/
 build/
+build_v2/
